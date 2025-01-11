@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "0.51.1",
+  "styles": {
+    "atomic": [
+      "display]___[value:flex",
+      "justifyContent]___[value:center",
+      "backgroundColor]___[value:red",
+      "backgroundColor]___[value:orange",
+      "backgroundColor]___[value:blue",
+      "backgroundColor]___[value:pink"
+    ],
+    "recipes": {}
+  }
+}
