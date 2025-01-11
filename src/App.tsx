@@ -14,7 +14,7 @@ function App() {
         className={css({
           display: "flex",
           justifyContent: "center",
-          backgroundColor: "pink",
+          backgroundColor: "red",
         })}
       >
         blue blue

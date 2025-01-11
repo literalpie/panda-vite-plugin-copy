@@ -30,11 +30,14 @@ const postcssPlugin: PluginCreator<{}> = () => {
 };
 
 export default defineConfig({
-  plugins: [react(), myPlugin()],
-  css: {
-    postcss: {
-      plugins: [postcssPlugin()],
-    },
-  },
+  plugins: [
+    react(), 
+    // myPlugin()
+  ],
+  // css: {
+  //   postcss: {
+  //     plugins: [postcssPlugin()],
+  //   },
+  // },
 });
 postcssPlugin.postcss = true;
