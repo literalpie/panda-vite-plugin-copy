@@ -18,6 +18,8 @@ Since I think the slowdown cause is the overhead of the postcss plugin watching 
 
 My basic attempt at this reduced the first page load slightly, and made HMR instant.
 
+Another advantage of this approach is that it
+
 ## Data
 
 | Setup           | First Page Load | HMR (Change text in App.tsx) |
