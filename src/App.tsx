@@ -1,13 +1,12 @@
 import { useState } from "react";
 import { css } from "../styled-system/css";
-import { a, b, c, d } from "./test";
-
-console.log("a", a, "b", b, "c", c, "d", d);
+// import { a, b, c, d } from "./test";
+// import {c as cAgain} from './many-files/many-files_1/test_copy_1';
+// console.log("a", a, "b", b, "c", c, "d", d);
 import "./App.css";
 
 function App() {
   const [count, setCount] = useState(0);
-  // test!!!!
   return (
     <>
       <div
@@ -17,9 +16,9 @@ function App() {
           backgroundColor: "red",
         })}
       >
-        blue blue
+        blue red
       </div>
-      <h1>Vite + React</h1>
+      <h1>Vite + React!!</h1>
       <div className="card">
         <button onClick={() => setCount((count) => count + 1)}>
           count is {count}
