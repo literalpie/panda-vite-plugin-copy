@@ -10,6 +10,6 @@ Run `pnpm make-files` before doing any tests to generate a large amount of files
 
 Run `pnpm dev:postcss` to see the basic postcss approach. The first load will take several seconds. HMR takes a few seconds when making a change to a file that Panda watches.
 
-Run `pnpm dev:plugin` to see how things work with the plugin. Startup and HMR are both very quick.
+Run `pnpm dev:cli` to use the CLI. This is the current recommended way. In a project this large, the HMR update time is pretty quick, but the startup time is over 10 seconds.
 
-Run `pnpm dev:cli` to use the CLI. This is the current recommended way. In a project this large, the startup time is over 10 seconds, but the HMR update time is pretty quick.
+Run `pnpm dev:plugin` to see how things work with the plugin. Startup and HMR are both very quick.
