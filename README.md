@@ -1,29 +1,15 @@
-# Panda Many Files Performance
+# Panda Vite plugin Proof of Concept
 
-This repo has a huge number of files to show how PandaCSS performance degrades with the number of files.
+The panda CLI is very fast, but the startup time can be slow with very many files, and it checks every file for CSS, not just files that get imported. In a very large monorepo, it would be cumbersome to keep track of which files should be scanned for panda usage.
 
-It is representative of the number of files in a private repo I work on.
+This plugin solves both of those issues by using a vite plugin and doing Panda processing in a Vite hook - only when the files are transformed by Vite (and therefore only when the files are actually imported)
 
-## See the issue
+## Compare the Performance
 
-Run `pnpm dev`. This takes about 30s on my machine, but that's expected.
-Open the page in a browser and see how long it takes to load the page. For me, it was about 24 seconds. Vite reports the "extract" step takes 8.2-8.4 seconds on my M2 Pro Macbook Pro.
-Making a change to text takes over 3 seconds (measured with a stopwatch since Vite doesn't report this)
+Run `pnpm make-files` before doing any tests to generate a large amount of files, which will better show the difference in the approaches.
 
-Without the Panda PostCSS plugin the browser loads is instantly the first time and when making changes.
+Run `pnpm dev:postcss` to see the basic postcss approach. The first load will take several seconds. HMR takes a few seconds when making a change to a file that Panda watches.
 
-## Proof of Concept Vite Plugin
+Run `pnpm dev:plugin` to see how things work with the plugin. Startup and HMR are both very quick.
 
-Since I think the slowdown cause is the overhead of the postcss plugin watching files, and Vite already does its own file watching, I think it could make sense to watch the TS files in a Vite plugin and only use the postcss plugin to output the results.
-
-My basic attempt at this reduced the first page load slightly, and made HMR instant.
-
-Another advantage of this approach is that it
-
-## Data
-
-| Setup           | First Page Load | HMR (Change text in App.tsx) |
-| --------------- | --------------- | ---------------------------- |
-| No Panda        | Instant         | Instant                      |
-| With Panda      | 24 seconds      | 3-4 seconds                  |
-| POC Vite Plugin | 15 seconds      | instant seconds              |
+Run `pnpm dev:cli` to use the CLI. This is the current recommended way. In a project this large, the startup time is over 10 seconds, but the HMR update time is pretty quick.

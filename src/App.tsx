@@ -1,8 +1,5 @@
 import { useState } from "react";
 import { css } from "../styled-system/css";
-// import { a, b, c, d } from "./test";
-// import {c as cAgain} from './many-files/many-files_1/test_copy_1';
-// console.log("a", a, "b", b, "c", c, "d", d);
 import "./App.css";
 
 function App() {
@@ -13,13 +10,13 @@ function App() {
         className={css({
           display: "flex",
           justifyContent: "center",
-          backgroundColor: "red",
+          backgroundColor: "blue.200",
         })}
       >
-        blue red
+        blue purple
       </div>
       <h1>Vite + React!!</h1>
-      <div className="card">
+      <div>
         <button onClick={() => setCount((count) => count + 1)}>
           count is {count}
         </button>

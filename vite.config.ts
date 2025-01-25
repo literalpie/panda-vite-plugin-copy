@@ -1,154 +1,129 @@
-import { defineConfig, Plugin } from "vite";
+/// <reference types="vite/client" />
+import { defineConfig, ModuleNode, Plugin } from "vite";
 import path from "path";
-import fs from "fs";
 import react from "@vitejs/plugin-react";
-import { Builder } from "@pandacss/node";
-import type { PluginCreator, TransformCallback } from "postcss";
-import {minimatch} from 'minimatch';
+import { Builder, PandaContext } from "@pandacss/node";
+import { minimatch } from "minimatch";
+import pandacss from "@pandacss/dev/postcss";
 
-const tempConfigPath = path.resolve(__dirname, 'temp.panda.config.ts');
+const panda = async ({
+  configPath,
+  cwd,
+}: { configPath?: string; cwd?: string } = {}): Promise<Plugin> => {
+  const builder = new Builder();
+  await builder.setup({ configPath, cwd });
+  const accumulatedFilesSet = new Set<string>();
+  const ctx = builder.context;
 
-// Makes a panda config file that only includes certain files
-const writeTempConfig = (files: string[]) => {
-  const includeArray = files.map((file)=>`'${file}'`).join(',');
-  fs.writeFileSync(tempConfigPath, `
-    import { defineConfig } from "@pandacss/dev";
-  
-    export default defineConfig({
-      // Whether to use css reset
-      preflight: true,
-  
-      // Where to look for your css declarations
-      include: [${includeArray}],
-  
-      // Files to exclude
-      exclude: [],
-  
-      // Useful for theme customization
-      theme: {
-        extend: {},
-      },
-  
-      // The output directory for your css system
-      outdir: "styled-system",
-      importMap: "./styled-system",
-    });
-  `);
-}
+  let skipNextCssUpdate = false;
+  let cssUpdateTimeout: NodeJS.Timeout | null = null;
+  const bundleStyles = async (
+    ctx: PandaContext,
+    changedFilePath: string,
+    debounce = false
+  ) => {
+    const outfile = ctx.runtime.path.join(...ctx.paths.root, "styles.css");
+    const parserResult = ctx.project.parseSourceFile(changedFilePath);
+    // Based on Panda's cli: https://github.com/chakra-ui/panda/blob/c2612b7127/packages/node/src/generate.ts
+    if (parserResult) {
+      const sheet = ctx.createSheet();
+      ctx.appendLayerParams(sheet);
+      ctx.appendBaselineCss(sheet);
+      ctx.appendParserCss(sheet);
+      const css = ctx.getCss(sheet);
 
-
-const builder = new Builder();
-await builder.setup({configPath: './temp.panda.config.ts'});
-// await builder.setupContext({ configPath: "./temp.panda.config.ts" });
-writeTempConfig([]);
-const accumulatedFilesSet = new Set<string>();
-
-const myPlugin = (): Plugin => {
+      // Debounce writing the file because we only want to write once on the initial load when many files are parsed
+      if (debounce) {
+        if (cssUpdateTimeout) {
+          clearTimeout(cssUpdateTimeout);
+        }
+        cssUpdateTimeout = setTimeout(async () => {
+          const css = ctx.getCss(sheet);
+          await ctx.runtime.fs.writeFile(outfile, css);
+        }, 100);
+      } else {
+        await ctx.runtime.fs.writeFile(outfile, css);
+      }
+    }
+  };
   return {
-    name: "my-plugin",
-    transform(src, id) {
-      console.log('transform', id)
-      // Any time Vite transforms a file and it matches the include pattern,
-      // we add it to the generated temporary panda.config.ts
+    name: "vite-plugin-panda",
+    watchChange(id, change) {
+      if (!ctx) return;
+      // I don't know if removing source files, or reloading really makes a difference compared to adding each time it's transformed.
+      if (change.event === "delete") {
+        accumulatedFilesSet.delete(id);
+        ctx.project.removeSourceFile(id);
+      }
+    },
+    transformIndexHtml(html) {
+      const ctx = builder.context;
+      if (!ctx) return html;
+      // Maybe we should instead do something that would work for production too.
+      // It would also work to add the import to the main.ts or any other file.
+      const outfile = ctx.runtime.path.join(...ctx.paths.root, "styles.css");
+      return html.replace(
+        "</head>",
+        `<link rel="stylesheet" href="${outfile}"></head>`
+      );
+    },
+    handleHotUpdate: async ({ server, file, modules }) => {
+      if (!ctx) return modules;
+      const relativeId = path.relative(__dirname, file);
+      const outfile = ctx.runtime.path.join(...ctx.paths.root, "styles.css");
+      if (minimatch(relativeId, "src/**/*.{js,jsx,ts,tsx}")) {
+        // Let panda update css based on changes
+        ctx?.project.reloadSourceFile(file);
+        await bundleStyles(ctx, file);
+
+        const pandaCss = server?.moduleGraph.getModuleById(outfile + "?direct");
+        skipNextCssUpdate = true;
+        return [...modules, pandaCss].filter(Boolean) as ModuleNode[];
+      } else if (file === outfile && skipNextCssUpdate) {
+        // Since we include the css file in the update, we ignore the next time that file is updated.
+        skipNextCssUpdate = false;
+        return modules.filter((module) => module.id !== outfile + "?direct");
+      }
+    },
+    // When files are transformed for the first time, add them to the panda builder so it can write the css
+    async transform(src, id) {
       const relativeId = path.relative(__dirname, id);
-      if(minimatch(relativeId, "src/**/*.{js,jsx,ts,tsx}") && !accumulatedFilesSet.has(id)) {
-        console.log('adding for first time', id)
-        accumulatedFilesSet.add(id);
-        writeTempConfig([...accumulatedFilesSet]);
-      } 
+      // Ideally, we should allow setting include values in the panda.config, and ignore them in the context and use them here.
+      if (
+        minimatch(relativeId, "src/**/*.{js,jsx,ts,tsx}") &&
+        ctx !== undefined
+      ) {
+        if (accumulatedFilesSet.has(id)) {
+          // updates are handled in the hotUpdates hook
+        } else {
+          accumulatedFilesSet.add(id);
+          builder.context?.project.createSourceFile(id);
+          bundleStyles(ctx, id, true);
+        }
+      }
       return { code: src };
     },
   };
 };
-const PLUGIN_NAME = 'my-pandacss'
-let builderGuard: Promise<void> | undefined
 
-const postcssPlugin: PluginCreator<unknown> = () => {
-
-  const postcssProcess: TransformCallback = async function (root, result) {
-    const fileName = result.opts.from
-
-    const skip = shouldSkip(fileName)
-    if (skip) return
-    // I don't know why this setup is needed, since we do it at the begining of the file.
-    await builder.setup({ configPath:'temp.panda.config.ts', cwd:undefined })
-
-    // ignore non-panda css file
-    if (!builder.isValidRoot(root)) return
-
-    await builder.emit()
-
-    builder.extract()
-
-    builder.registerDependency((dep) => {
-      result.messages.push({
-        ...dep,
-        plugin: PLUGIN_NAME,
-        parent: result.opts.from,
-      })
-    })
-    // console.log('postcss thing', root)
-
-    builder.write(root)
-    console.log('css builder files', builder.context?.getFiles())
-    // builder.context?.createUtility(root)
-    // const sheet = builder.context?.createSheet()
-    // const css = builder.context?.getCss(sheet);
-
-    // console.log('css' ,css);
-
-    root.walk((node) => {
-      if (!node.source) {
-        node.source = root.source
-      }
-    })
-  }
-
-  return {
-    postcssPlugin: PLUGIN_NAME,
-    plugins: [
-      // async (root) => {
-      //   await builder.emit();
-      //   builder.extract();
-      //   builder.write(root);
-      //   console.log('classnames', builder.context?.utility.classNames)
-
-      // },
-
-      function (...args) {
-        builderGuard = Promise.resolve(builderGuard)
-          .catch(() => {
-            /**/
-          })
-          .then(() => postcssProcess(...args))
-        return builderGuard
-      },
-    ],
-  }
-};
-
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [
-    react(), 
-    // myPlugin()
+    react(),
+    mode === "plugin" && panda({ configPath: "./panda-minimal.config.ts" }),
+    mode === 'cli' && {
+      name: 'panda-cli',
+      transformIndexHtml: (html) => {
+        return html.replace(
+          "</head>",
+          `<link rel="stylesheet" href="./styled-system/styles.css"></head>`
+        );
+  
+      }
+    }
   ],
   css: {
-    // postcss: {
-      // plugins: [postcssPlugin()],
-    // },
+    postcss: {
+      plugins: mode === "postcss" ? [pandacss()] : [],
+    },
   },
-});
-const nodeModulesRegex = /node_modules/
-
-function isValidCss(file: string) {
-  const [filePath] = file.split('?')
-  return path.extname(filePath) === '.css'
-}
-
-const shouldSkip = (fileName: string | undefined) => {
-  if (!fileName) return true
-  if (!isValidCss(fileName)) return true
-  return nodeModulesRegex.test(fileName)
-}
-
-postcssPlugin.postcss = true;
+}));

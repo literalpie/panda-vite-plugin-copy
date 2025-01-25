@@ -5,7 +5,7 @@ export default defineConfig({
   preflight: true,
 
   // intentionally points to files that don't exist because the Vite plugin will add files to the context as Vite builds
-  include: ['./src/**/*.{js,jsx,ts,tsx}'],
+  include: ['./noop/**/*.{js,jsx,ts,tsx}'],
   jsxFramework: 'react',
   // Files to exclude
 
